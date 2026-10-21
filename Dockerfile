@@ -31,7 +31,7 @@ COPY --from=gateway-build /out/yakumo-adhoc-gateway /usr/local/bin/yakumo-adhoc-
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENV PORT=8080
+ENV GATEWAY_PORT=8080
 ENV ADHOC_PORT=27312
 EXPOSE 8080
 EXPOSE 27312

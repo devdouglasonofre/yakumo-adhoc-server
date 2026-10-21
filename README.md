@@ -40,8 +40,8 @@ protocol implementation is unchanged Yakumo code.
 ## Deploy on Railway
 
 1. Create a Railway project and a service from this repository.
-2. Railway builds the `Dockerfile`. The container listens on `PORT` (8080 by
-   default), with the real server on 27312/27313 inside the container.
+2. Railway builds the `Dockerfile`. The container listens on `GATEWAY_PORT`
+   (8080 by default), with the real server on 27312/27313 inside the container.
 3. Add a **TCP Proxy** to the service targeting port **8080**.
 4. Use the generated endpoint (`host:port`) as the server address in Yakumo.
 
@@ -49,9 +49,12 @@ Railway environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PORT` | `8080` | Public gateway port; point the TCP proxy here |
+| `GATEWAY_PORT` | `8080` | Public gateway port; point the TCP proxy here |
 | `ADHOC_PORT` | `27312` | Internal matchmaking port; the relay uses the next one |
 | `YAKUMO_ADHOC_VERBOSE` | unset | Set to any value to log packet-level detail |
+
+`GATEWAY_PORT` is deliberately not `PORT`: Railway may inject its own `PORT`
+for other frameworks, and the TCP proxy target must stay predictable.
 
 No volume is required: the server keeps all state in memory. Restarting the
 service disconnects everyone, as restarting the in-game host would.
@@ -77,7 +80,7 @@ The public TCP endpoint is a single port. The gateway hides the relay's usual
 
 ```sh
 docker build -t yakumo-adhoc-server .
-docker run --rm -p 18080:8080 -e PORT=8080 yakumo-adhoc-server
+docker run --rm -p 18080:8080 -e GATEWAY_PORT=8080 yakumo-adhoc-server
 ```
 
 The tests are small Python clients that speak the real protocols:

@@ -149,7 +149,7 @@ func handle(client net.Conn) {
 }
 
 func main() {
-	port := envOr("PORT", "8080")
+	port := envOr("GATEWAY_PORT", "8080")
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("cannot listen on port %s: %v", port, err)
