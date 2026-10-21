@@ -97,6 +97,7 @@ can be pointed at another host/port by editing the constants at the top.
 
 ```
 Dockerfile              multi-stage build: C++ server + Go gateway
+railway.json            Railway build/deploy configuration (Dockerfile, always restart)
 src/server_main.cpp     minimal entry point around Yakumo's Server
 vendor/yakumo/adhoc/    unmodified Yakumo adhoc sources (MIT)
 gateway/main.go         one-port protocol-aware TCP gateway
