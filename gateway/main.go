@@ -79,7 +79,7 @@ func classify(conn net.Conn) (string, []byte, error) {
 		// three leading zero MAC bytes. The login packet is 144 bytes and
 		// arrives in one write; a relay init record is 24 bytes.
 		if buffer[0] == 1 {
-			_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+			_ = conn.SetReadDeadline(time.Now().Add(750 * time.Millisecond))
 			for len(buffer) < 144 {
 				n, err = conn.Read(chunk)
 				if n > 0 {
@@ -93,9 +93,10 @@ func classify(conn net.Conn) (string, []byte, error) {
 				return ctlPort, buffer, nil
 			}
 		}
-		if len(buffer) >= 24 {
-			return relayPort, buffer, nil
-		}
+		// A fragmented relay record is fine: the backend buffers what is
+		// missing. Do not misroute it to matchmaking just because fewer than
+		// 24 bytes arrived in the first read.
+		return relayPort, buffer, nil
 	}
 
 	return ctlPort, buffer, nil
