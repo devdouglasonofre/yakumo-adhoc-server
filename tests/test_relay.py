@@ -23,7 +23,7 @@ def ctl_login(mac_hex, nickname):
     return sock, data
 
 
-def relay_pdp(mac_hex, port):
+def relay_pdp(mac_hex, port, fragment=False):
     mac = bytes.fromhex(mac_hex)
     packet = (
         struct.pack("<I", 0)
@@ -34,7 +34,12 @@ def relay_pdp(mac_hex, port):
         + struct.pack("<H", 0)
     )
     sock = socket.create_connection((HOST, PORT), timeout=5)
-    sock.sendall(packet)
+    if fragment:
+        sock.sendall(packet[:4])
+        time.sleep(0.05)
+        sock.sendall(packet[4:])
+    else:
+        sock.sendall(packet)
     sock.settimeout(2)
     return sock
 
@@ -45,7 +50,7 @@ print("A join:", a_join.hex())
 print("B join:", b_join.hex())
 
 a_relay = relay_pdp("020000000001", 10000)
-b_relay = relay_pdp("020000000002", 10000)
+b_relay = relay_pdp("020000000002", 10000, fragment=True)
 time.sleep(0.2)
 
 payload = b"hello relay"
