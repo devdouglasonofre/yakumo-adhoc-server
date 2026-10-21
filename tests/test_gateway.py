@@ -57,5 +57,6 @@ def relay_init(mac_hex="021122334455"):
 
 print("login response:", login().hex())
 print("join response:", join("02aabbccddee").hex())
+print("zero-mac join response:", join("000000000001").hex())
 print("relay init bytes:", relay_init())
 time.sleep(0.5)
