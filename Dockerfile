@@ -12,7 +12,7 @@ RUN mkdir -p /out \
     && g++ -std=c++20 -O2 -pthread -I. adhoc/server.cpp server_main.cpp -o /out/yakumo-adhoc-server
 
 
-FROM golang:1.23-bookworm AS gateway-build
+FROM golang:1.24-bookworm AS gateway-build
 
 WORKDIR /src
 COPY gateway/go.mod gateway/main.go ./

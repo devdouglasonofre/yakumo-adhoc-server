@@ -90,8 +90,12 @@ python3 tests/test_gateway.py   # login, group join, relay init
 python3 tests/test_relay.py     # two players exchange a PDP datagram
 ```
 
-`tests/test_gateway.py` expects the gateway on `127.0.0.1:18080`; both scripts
-can be pointed at another host/port by editing the constants at the top.
+The scripts default to `127.0.0.1:18080`. Point them at another endpoint with
+`ADHOC_HOST` and `ADHOC_PORT`, for example:
+
+```sh
+ADHOC_HOST=shuttle.proxy.rlwy.net ADHOC_PORT=15140 python3 tests/test_gateway.py
+```
 
 ## Layout
 
