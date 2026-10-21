@@ -1,9 +1,10 @@
+import os
 import socket
 import struct
 import time
 
-HOST = "127.0.0.1"
-PORT = 18080
+HOST = os.environ.get("ADHOC_HOST", "127.0.0.1")
+PORT = int(os.environ.get("ADHOC_PORT", "18080"))
 GROUP = b"MHP3Q000"
 PRODUCT = b"ULJM05800"
 
