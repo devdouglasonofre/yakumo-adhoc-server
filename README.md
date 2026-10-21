@@ -2,7 +2,8 @@
 
 A standalone PSP ad hoc server built from [Yakumo](https://github.com/TeamGDB/Yakumo)'s
 own server implementation, packaged so it can run on Railway with a single
-public TCP port.
+public TCP port, plus a lobby dashboard service that shows the players each
+client reports when it enters a gathering hall.
 
 Yakumo normally runs the server inside the game (**Network → Host a session**)
 or alone with `Yakumo --adhoc-server`. This repository extracts the second
@@ -59,6 +60,47 @@ for other frameworks, and the TCP proxy target must stay predictable.
 No volume is required: the server keeps all state in memory. Restarting the
 service disconnects everyone, as restarting the in-game host would.
 
+## Lobby dashboard (second service)
+
+The repository also holds a small dashboard service in `dashboard/`. It is a
+separate Railway service in the same project: it shows who is in which hall and
+the data each Yakumo client reports when it enters one. It never touches the
+game protocol, so a dashboard outage cannot affect play.
+
+Two ways in:
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /` | the page (refreshes itself every 5 seconds) |
+| `GET /api/players` | the current players as JSON |
+| `POST /api/report` | one report as a JSON body |
+| `GET /healthz` | liveness |
+| TCP `LOBBY_TCP_PORT` | newline-delimited JSON reports, used by the client |
+
+The client reports over a plain TCP line protocol instead of HTTPS: the game
+client has no TLS stack, and the service already has its own TCP proxy.
+
+Railway setup for the second service:
+
+1. Create the service with **root directory** `dashboard` (its `Dockerfile` and
+   `railway.json` are inside that folder).
+2. Add a public **HTTP domain** targeting port `8080` for the page.
+3. Add a **TCP Proxy** targeting port `8090` for client reports.
+4. Point Yakumo's *Lobby server* at the TCP endpoint, for example
+   `shuttle.proxy.rlwy.net:20412`.
+
+Environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP port for the page and API |
+| `LOBBY_TCP_PORT` | `8090` | TCP port for client reports |
+| `LOBBY_TOKEN` | unset | When set, reports must carry the same token |
+
+The dashboard keeps everything in memory, so a restart clears the board. The
+data is self-reported by each client; treat it as informational, not
+authoritative.
+
 ## Connect from Yakumo
 
 1. Open Yakumo's menu (Esc, or L3+R3), go to **Network**.
@@ -106,7 +148,8 @@ src/server_main.cpp     minimal entry point around Yakumo's Server
 vendor/yakumo/adhoc/    unmodified Yakumo adhoc sources (MIT)
 gateway/main.go         one-port protocol-aware TCP gateway
 docker/entrypoint.sh    runs both processes and forwards SIGTERM
-tests/                  protocol smoke tests
+dashboard/              lobby dashboard service (own Dockerfile and railway.json)
+tests/                  protocol and dashboard smoke tests
 ```
 
 ## Attribution and licence

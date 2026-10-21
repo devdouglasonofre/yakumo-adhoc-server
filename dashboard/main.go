@@ -1,0 +1,456 @@
+// Yakumo lobby dashboard.
+//
+// A small service beside the ad hoc server. It keeps the data each player's
+// Yakumo client reports when it enters a gathering hall, and shows it on a web
+// page. Two ways in:
+//
+//   - HTTP:  GET /              the page
+//     GET /api/players   the current players as JSON
+//     POST /api/report   one report as a JSON body
+//     GET /healthz       liveness
+//   - TCP:   newline-delimited JSON reports, one per line, on LOBBY_TCP_PORT.
+//     The game client uses this, so it needs no TLS and no HTTP stack.
+//
+// The service keeps everything in memory: it is a presence board, not a
+// database. Restarting it clears the board. It never talks to the game server;
+// the two services only share the Railway project.
+package main
+
+import (
+	"bufio"
+	"crypto/subtle"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	protocolVersion = 1
+	// A player that has not been heard from for this long is shown as off line.
+	onlineWindow = 90 * time.Second
+	maxLineBytes = 1 << 20
+)
+
+// Piece is one worn armor piece.
+type Piece struct {
+	Slot string `json:"slot"`
+	ID   uint16 `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+// Weapon is the carried weapon.
+type Weapon struct {
+	Kind uint8  `json:"kind"`
+	ID   uint16 `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+// Report is one message from a client, over HTTP or the TCP line protocol.
+type Report struct {
+	Version   int     `json:"v"`
+	Type      string  `json:"type"` // "report" (default), "leave" or "event"
+	MAC       string  `json:"mac"`
+	Nickname  string  `json:"nickname"`
+	Product   string  `json:"product"`
+	Server    string  `json:"server"`
+	Hall      string  `json:"hall"`
+	Name      string  `json:"name"`
+	Sex       string  `json:"sex"`
+	HR        int     `json:"hr"`
+	Title     string  `json:"title"`
+	GuildCard string  `json:"guild_card,omitempty"`
+	Equipment []Piece `json:"equipment,omitempty"`
+	Weapon    *Weapon `json:"weapon,omitempty"`
+	Token     string  `json:"token,omitempty"`
+	Time      int64   `json:"ts,omitempty"`
+}
+
+// Player is the stored state of one virtual MAC.
+type Player struct {
+	MAC       string    `json:"mac"`
+	Nickname  string    `json:"nickname"`
+	Product   string    `json:"product"`
+	Server    string    `json:"server"`
+	Hall      string    `json:"hall"`
+	Name      string    `json:"name"`
+	Sex       string    `json:"sex"`
+	HR        int       `json:"hr"`
+	Title     string    `json:"title"`
+	GuildCard string    `json:"guild_card,omitempty"`
+	Equipment []Piece   `json:"equipment,omitempty"`
+	Weapon    *Weapon   `json:"weapon,omitempty"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+	Online    bool      `json:"online"`
+	Left      bool      `json:"left,omitempty"`
+	Reports   int       `json:"reports"`
+}
+
+// Store keeps the last report of every player.
+type Store struct {
+	mu      sync.Mutex
+	players map[string]*Player
+	now     func() time.Time
+}
+
+// NewStore makes an empty store.
+func NewStore() *Store {
+	return &Store{players: make(map[string]*Player), now: time.Now}
+}
+
+// normalizeMAC accepts "aa:bb:cc:dd:ee:ff" or "aabbccddeeff" and returns the
+// colon form in lower case.
+func normalizeMAC(text string) (string, bool) {
+	clean := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(text), ":", ""))
+	if len(clean) != 12 {
+		return "", false
+	}
+	for _, c := range clean {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return "", false
+		}
+	}
+	return clean[0:2] + ":" + clean[2:4] + ":" + clean[4:6] + ":" + clean[6:8] + ":" + clean[8:10] + ":" + clean[10:12], true
+}
+
+// Apply stores one report. A "leave" marks the player off line but keeps the
+// last known data; any other type updates the fields it carries.
+func (s *Store) Apply(report Report) error {
+	mac, ok := normalizeMAC(report.MAC)
+	if !ok {
+		return fmt.Errorf("invalid MAC %q", report.MAC)
+	}
+	now := s.now()
+	if report.Type == "leave" {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if player, found := s.players[mac]; found {
+			player.LastSeen = now
+			player.Online = false
+			player.Left = true
+			player.Hall = ""
+			player.Reports++
+		}
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	player, found := s.players[mac]
+	if !found {
+		player = &Player{MAC: mac, FirstSeen: now}
+		s.players[mac] = player
+	}
+	player.LastSeen = now
+	player.Online = true
+	player.Left = false
+	player.Reports++
+	if report.Nickname != "" {
+		player.Nickname = report.Nickname
+	}
+	if report.Product != "" {
+		player.Product = report.Product
+	}
+	if report.Server != "" {
+		player.Server = report.Server
+	}
+	if report.Hall != "" {
+		player.Hall = report.Hall
+	}
+	if report.Name != "" {
+		player.Name = report.Name
+	}
+	if report.Sex != "" {
+		player.Sex = report.Sex
+	}
+	if report.HR > 0 {
+		player.HR = report.HR
+	}
+	if report.Title != "" {
+		player.Title = report.Title
+	}
+	if report.GuildCard != "" {
+		player.GuildCard = report.GuildCard
+	}
+	if report.Equipment != nil {
+		player.Equipment = report.Equipment
+	}
+	if report.Weapon != nil {
+		player.Weapon = report.Weapon
+	}
+	return nil
+}
+
+// Snapshot returns a copy of every player, on line first, then by hall and
+// name. Online is computed from the last time each player was heard from.
+func (s *Store) Snapshot() []Player {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	out := make([]Player, 0, len(s.players))
+	for _, player := range s.players {
+		copy := *player
+		copy.Online = !copy.Left && now.Sub(copy.LastSeen) <= onlineWindow
+		out = append(out, copy)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Online != out[j].Online {
+			return out[i].Online
+		}
+		if out[i].Hall != out[j].Hall {
+			return out[i].Hall < out[j].Hall
+		}
+		left := out[i].Name
+		if left == "" {
+			left = out[i].Nickname
+		}
+		right := out[j].Name
+		if right == "" {
+			right = out[j].Nickname
+		}
+		return left < right
+	})
+	return out
+}
+
+// Count returns how many players are stored.
+func (s *Store) Count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.players)
+}
+
+func tokenMatches(want, got string) bool {
+	if want == "" {
+		return true
+	}
+	return subtle.ConstantTimeCompare([]byte(want), []byte(got)) == 1
+}
+
+// handler builds the HTTP surface. `token` is the shared secret when set.
+func handler(store *Store, token string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	mux.HandleFunc("/api/players", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		players := store.Snapshot()
+		online := 0
+		for _, player := range players {
+			if player.Online {
+				online++
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"v":       protocolVersion,
+			"online":  online,
+			"players": players,
+		})
+	})
+	mux.HandleFunc("/api/report", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		body := http.MaxBytesReader(w, r.Body, maxLineBytes)
+		defer body.Close()
+		var report Report
+		if err := json.NewDecoder(body).Decode(&report); err != nil {
+			http.Error(w, "bad report: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if !tokenMatches(token, firstNonEmpty(report.Token, r.Header.Get("X-Lobby-Token"))) {
+			http.Error(w, "bad token", http.StatusForbidden)
+			return
+		}
+		if err := store.Apply(report); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(page))
+	})
+	return mux
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// serveTCP reads newline-delimited JSON reports until the process stops.
+func serveTCP(store *Store, token, address string) error {
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("cannot listen on %s: %w", address, err)
+	}
+	return serveTCPListener(store, token, listener)
+}
+
+// serveTCPListener is serveTCP on an already open listener, for tests.
+func serveTCPListener(store *Store, token string, listener net.Listener) error {
+	log.Printf("lobby reports on TCP %s", listener.Addr())
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			log.Printf("accept failed: %v", err)
+			continue
+		}
+		go handleReportConnection(store, token, connection)
+	}
+}
+
+func handleReportConnection(store *Store, token string, connection net.Conn) {
+	defer connection.Close()
+	scanner := bufio.NewScanner(connection)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
+	for {
+		_ = connection.SetReadDeadline(time.Now().Add(10 * time.Minute))
+		if !scanner.Scan() {
+			return
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var report Report
+		if err := json.Unmarshal([]byte(line), &report); err != nil {
+			log.Printf("bad report from %s: %v", connection.RemoteAddr(), err)
+			continue
+		}
+		if !tokenMatches(token, report.Token) {
+			log.Printf("refused a report from %s: bad token", connection.RemoteAddr())
+			continue
+		}
+		if err := store.Apply(report); err != nil {
+			log.Printf("refused a report from %s: %v", connection.RemoteAddr(), err)
+		}
+	}
+}
+
+func envOr(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func main() {
+	store := NewStore()
+	token := os.Getenv("LOBBY_TOKEN")
+	httpPort := envOr("PORT", "8080")
+	tcpPort := envOr("LOBBY_TCP_PORT", "8090")
+
+	go func() {
+		if err := serveTCP(store, token, ":"+tcpPort); err != nil {
+			log.Fatalf("tcp server: %v", err)
+		}
+	}()
+
+	address := ":" + httpPort
+	log.Printf("lobby dashboard on HTTP %s", address)
+	if err := http.ListenAndServe(address, handler(store, token)); err != nil {
+		log.Fatalf("http server: %v", err)
+	}
+}
+
+// page is the dashboard itself: one table, refreshed from /api/players.
+const page = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yakumo Lobby</title>
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; padding: 24px; background: #16131a; color: #e8e2ea;
+       font: 15px/1.45 system-ui, sans-serif; }
+h1 { margin: 0 0 4px; font-size: 22px; }
+p.lead { margin: 0 0 20px; color: #a89fae; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2c2632; vertical-align: top; }
+th { color: #b98335; font-weight: 600; }
+tr.offline { opacity: .45; }
+.hall { font-family: ui-monospace, monospace; }
+.equipment { color: #cfc6d4; }
+.empty { color: #a89fae; }
+</style>
+</head>
+<body>
+<h1>Yakumo Lobby</h1>
+<p class="lead" id="lead">Loading…</p>
+<table>
+<thead><tr><th>Hunter</th><th>HR</th><th>Hall</th><th>Equipment</th><th>Last seen</th></tr></thead>
+<tbody id="players"></tbody>
+</table>
+<script>
+async function refresh() {
+  try {
+    const response = await fetch('/api/players', { cache: 'no-store' });
+    const data = await response.json();
+    document.getElementById('lead').textContent =
+      data.online + ' of ' + data.players.length + ' hunter(s) on line';
+    const body = document.getElementById('players');
+    body.replaceChildren();
+    for (const player of data.players) {
+      const row = document.createElement('tr');
+      if (!player.online) row.className = 'offline';
+      const name = document.createElement('td');
+      name.textContent = (player.name || player.nickname || player.mac) +
+        (player.title ? ' — ' + player.title : '');
+      const hr = document.createElement('td');
+      hr.textContent = player.hr ? 'HR ' + player.hr : '';
+      const hall = document.createElement('td');
+      hall.className = 'hall';
+      hall.textContent = player.hall || '';
+      const equipment = document.createElement('td');
+      equipment.className = 'equipment';
+      const parts = [];
+      for (const piece of player.equipment || []) parts.push(piece.name || (piece.slot + ' #' + piece.id));
+      if (player.weapon) parts.push(player.weapon.name || ('weapon #' + player.weapon.id));
+      equipment.textContent = parts.join(', ');
+      const seen = document.createElement('td');
+      const seconds = Math.max(0, Math.round((Date.now() - Date.parse(player.last_seen)) / 1000));
+      seen.textContent = player.online ? 'now' : seconds + 's ago';
+      row.append(name, hr, hall, equipment, seen);
+      body.append(row);
+    }
+    if (data.players.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'empty';
+      cell.textContent = 'Nobody has reported yet.';
+      row.append(cell);
+      body.append(row);
+    }
+  } catch (error) {
+    document.getElementById('lead').textContent = 'Cannot reach the dashboard: ' + error;
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
+`
