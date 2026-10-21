@@ -75,24 +75,27 @@ func classify(conn net.Conn) (string, []byte, error) {
 	}
 
 	if len(buffer) >= 4 && buffer[1] == 0 && buffer[2] == 0 && buffer[3] == 0 && buffer[0] <= 3 {
-		// Ambiguous: a relay init record or a login whose MAC begins with
-		// three zero bytes. The login packet is 144 bytes and arrives in one
-		// write; a relay connection either sends exactly 24 bytes or starts
-		// with a non-login init type.
-		_ = conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
-		for len(buffer) < 144 {
-			n, err = conn.Read(chunk)
-			if n > 0 {
-				buffer = append(buffer, chunk[:n]...)
+		// Only a relay PTP-listen record (type 1) can look like a login with
+		// three leading zero MAC bytes. The login packet is 144 bytes and
+		// arrives in one write; a relay init record is 24 bytes.
+		if buffer[0] == 1 {
+			_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+			for len(buffer) < 144 {
+				n, err = conn.Read(chunk)
+				if n > 0 {
+					buffer = append(buffer, chunk[:n]...)
+				}
+				if err != nil {
+					break
+				}
 			}
-			if err != nil {
-				break
+			if len(buffer) >= 144 && buffer[0] == ctlLogin {
+				return ctlPort, buffer, nil
 			}
 		}
-		if len(buffer) >= 144 && buffer[0] == ctlLogin {
-			return ctlPort, buffer, nil
+		if len(buffer) >= 24 {
+			return relayPort, buffer, nil
 		}
-		return relayPort, buffer, nil
 	}
 
 	return ctlPort, buffer, nil
