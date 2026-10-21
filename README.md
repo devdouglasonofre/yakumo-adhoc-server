@@ -1,0 +1,114 @@
+# Yakumo ad hoc server for Railway
+
+A standalone PSP ad hoc server built from [Yakumo](https://github.com/TeamGDB/Yakumo)'s
+own server implementation, packaged so it can run on Railway with a single
+public TCP port.
+
+Yakumo normally runs the server inside the game (**Network → Host a session**)
+or alone with `Yakumo --adhoc-server`. This repository extracts the second
+mode into a small container. It does not contain any game code, assets, disc
+image, save data or generated recompiled code.
+
+## Why there is a gateway
+
+A PSP ad hoc server has two TCP services:
+
+| Port | Service |
+| --- | --- |
+| 27312 | `adhocctl` matchmaking: login, groups, scans, chat |
+| 27313 | Relay: PDP datagrams and PTP streams |
+
+The game derives the relay port as the matchmaking port plus one. Railway
+exposes one TCP proxy per service and chooses the public port itself, so a
+client cannot reach "the next public port" for the relay.
+
+`gateway/main.go` listens on the single public port and classifies each
+connection from its first bytes:
+
+* matchmaking starts with the `adhocctl` login opcode `1`, a virtual MAC,
+  a nickname and the product code;
+* relay connections start with a 24-byte init record whose first `u32` is a
+  relay type (`0..3`, little-endian).
+
+Ambiguous logins (a virtual MAC beginning with three zero bytes) are resolved
+by waiting briefly for the full 144-byte login packet. Bytes read while
+classifying are forwarded to the selected backend, so none are lost.
+
+The two real services still run on 27312 and 27313 inside the container, so the
+protocol implementation is unchanged Yakumo code.
+
+## Deploy on Railway
+
+1. Create a Railway project and a service from this repository.
+2. Railway builds the `Dockerfile`. The container listens on `PORT` (8080 by
+   default), with the real server on 27312/27313 inside the container.
+3. Add a **TCP Proxy** to the service targeting port **8080**.
+4. Use the generated endpoint (`host:port`) as the server address in Yakumo.
+
+Railway environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `8080` | Public gateway port; point the TCP proxy here |
+| `ADHOC_PORT` | `27312` | Internal matchmaking port; the relay uses the next one |
+| `YAKUMO_ADHOC_VERBOSE` | unset | Set to any value to log packet-level detail |
+
+No volume is required: the server keeps all state in memory. Restarting the
+service disconnects everyone, as restarting the in-game host would.
+
+## Connect from Yakumo
+
+1. Open Yakumo's menu (Esc, or L3+R3), go to **Network**.
+2. Turn **Ad hoc play** on.
+3. Set **Server** to the Railway TCP endpoint, for example
+   `shuttle.proxy.rlwy.net:15140`.
+4. Set a **Nickname** if you want one.
+5. In the village, go up the stairs to the gathering hall entrance and choose
+   **Online Guild Hall**, then the same hall number as the other players.
+
+Yakumo and PPSSPP players of *Monster Hunter Portable 3rd* (`ULJM-05800`) can
+meet on the same server because the protocol is the same. PPSSPP should use the
+relay (**AemuPostoffice**) data mode.
+
+The public TCP endpoint is a single port. The gateway hides the relay's usual
+"next port" behind it; players only enter the matchmaking endpoint.
+
+## Build and test locally
+
+```sh
+docker build -t yakumo-adhoc-server .
+docker run --rm -p 18080:8080 -e PORT=8080 yakumo-adhoc-server
+```
+
+The tests are small Python clients that speak the real protocols:
+
+```sh
+python3 tests/test_gateway.py   # login, group join, relay init
+python3 tests/test_relay.py     # two players exchange a PDP datagram
+```
+
+`tests/test_gateway.py` expects the gateway on `127.0.0.1:18080`; both scripts
+can be pointed at another host/port by editing the constants at the top.
+
+## Layout
+
+```
+Dockerfile              multi-stage build: C++ server + Go gateway
+src/server_main.cpp     minimal entry point around Yakumo's Server
+vendor/yakumo/adhoc/    unmodified Yakumo adhoc sources (MIT)
+gateway/main.go         one-port protocol-aware TCP gateway
+docker/entrypoint.sh    runs both processes and forwards SIGTERM
+tests/                  protocol smoke tests
+```
+
+## Attribution and licence
+
+The ad hoc server, `protocol.hpp`, `sockets.hpp` and the relevant client
+declarations come from [TeamGDB/Yakumo](https://github.com/TeamGDB/Yakumo),
+which is distributed under the MIT licence. The copy here is from commit
+`4a5debda0affe97e03722d1a58e77c4f2de2c7ab`. See
+`vendor/yakumo/LICENSE` and `NOTICE.md`.
+
+Yakumo and this repository are independent projects and are not affiliated
+with CAPCOM or Sony. They contain no game assets. You need your own legally
+obtained copy of the game to play.
