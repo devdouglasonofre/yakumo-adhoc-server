@@ -14,7 +14,7 @@ RUN apt-get update \
 
 COPY --from=build /out/yakumo-lobby /usr/local/bin/yakumo-lobby
 
-ENV PORT=8080
+ENV DASHBOARD_PORT=8080
 ENV LOBBY_TCP_PORT=8090
 EXPOSE 8080
 EXPOSE 8090

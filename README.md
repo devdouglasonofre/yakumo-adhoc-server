@@ -93,9 +93,12 @@ Environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP port for the page and API |
+| `DASHBOARD_PORT` | `8080` | HTTP port for the page and API |
 | `LOBBY_TCP_PORT` | `8090` | TCP port for client reports |
 | `LOBBY_TOKEN` | unset | When set, reports must carry the same token |
+
+`DASHBOARD_PORT` is deliberately not `PORT`: Railway may inject `PORT` from the
+TCP proxy's application port, and the HTTP server must stay on 8080.
 
 The dashboard keeps everything in memory, so a restart clears the board. The
 data is self-reported by each client; treat it as informational, not

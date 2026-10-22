@@ -358,7 +358,9 @@ func envOr(name, fallback string) string {
 func main() {
 	store := NewStore()
 	token := os.Getenv("LOBBY_TOKEN")
-	httpPort := envOr("PORT", "8080")
+	// Railway may inject PORT for its own routing; keep the dashboard's HTTP
+	// port separate from the TCP proxy's application port.
+	httpPort := envOr("DASHBOARD_PORT", "8080")
 	tcpPort := envOr("LOBBY_TCP_PORT", "8090")
 
 	go func() {

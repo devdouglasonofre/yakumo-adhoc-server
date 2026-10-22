@@ -11,13 +11,15 @@ import os
 import socket
 import urllib.request
 
-HTTP = os.environ.get("LOBBY_HTTP", "127.0.0.1:18080")
+HTTP = os.environ.get("LOBBY_HTTP", "http://127.0.0.1:18080")
+if "://" not in HTTP:
+    HTTP = "http://" + HTTP
 TCP = os.environ.get("LOBBY_TCP", "127.0.0.1:18090")
 
 
 def post_report(report):
     request = urllib.request.Request(
-        "http://" + HTTP + "/api/report",
+        HTTP + "/api/report",
         data=json.dumps(report).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -33,7 +35,7 @@ def tcp_report(report):
 
 
 def get_players():
-    with urllib.request.urlopen("http://" + HTTP + "/api/players", timeout=5) as response:
+    with urllib.request.urlopen(HTTP + "/api/players", timeout=5) as response:
         return json.loads(response.read())
 
 
@@ -59,7 +61,7 @@ assert by_name["Tester"]["hr"] == 7
 assert by_name["Tester"]["equipment"][0]["name"] == "Hunter Helm"
 assert by_name["Tester"]["weapon"]["name"] == "Iron Sword"
 
-with urllib.request.urlopen("http://" + HTTP + "/", timeout=5) as response:
+with urllib.request.urlopen(HTTP + "/", timeout=5) as response:
     page = response.read().decode()
 assert "Yakumo Lobby" in page
 
