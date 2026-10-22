@@ -49,8 +49,13 @@ func TestApplyAndSnapshot(t *testing.T) {
 		Sex:       "male",
 		HR:        7,
 		Title:     "Village Hero",
+		GuildCard: "See you at the hall!",
 		Equipment: []Piece{{Slot: "head", ID: 12, Name: "Hunter's Helm"}},
 		Weapon:    &Weapon{Kind: 5, ID: 3, Name: "Iron Sword"},
+		Quests: []Quest{{
+			Slot: 1, ID: 10522, Stars: 5, Fee: 800, Reward: 9600, TimeLimit: 36000,
+			Name: "The Festival of Fear", Objective: "Repel the Jhen Mohran", Monsters: "Jhen Mohran", Client: "Guildmaster",
+		}},
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -69,6 +74,13 @@ func TestApplyAndSnapshot(t *testing.T) {
 	}
 	if player.Weapon == nil || player.Weapon.Name != "Iron Sword" {
 		t.Errorf("weapon = %+v; want the reported weapon", player.Weapon)
+	}
+	if player.Title != "Village Hero" || player.GuildCard != "See you at the hall!" {
+		t.Errorf("guild card = %q / %q; want the reported title and comment", player.Title, player.GuildCard)
+	}
+	halls := store.Halls()
+	if len(halls) != 1 || halls[0].Name != "MHP3Q000" || len(halls[0].Quests) != 1 || halls[0].Quests[0].Name != "The Festival of Fear" {
+		t.Errorf("halls = %+v; want the posted quest under the hall", halls)
 	}
 
 	now = now.Add(2 * onlineWindow)

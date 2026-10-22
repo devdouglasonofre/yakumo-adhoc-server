@@ -1,7 +1,7 @@
 FROM golang:1.24-bookworm AS build
 
 WORKDIR /src
-COPY go.mod main.go main_test.go ./
+COPY go.mod main.go main_test.go page.html ./
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/yakumo-lobby .
 

@@ -47,19 +47,42 @@ post_report(
         "name": "Tester",
         "hall": "MHP3Q000",
         "hr": 7,
+        "title": "Village Hero",
+        "guild_card": "See you at the hall!",
         "equipment": [{"slot": "head", "id": 12, "name": "Hunter Helm"}],
         "weapon": {"kind": 5, "id": 3, "name": "Iron Sword"},
+        "quests": [
+            {
+                "slot": 1,
+                "id": 10522,
+                "stars": 5,
+                "fee": 800,
+                "reward": 9600,
+                "time_limit": 36000,
+                "name": "The Festival of Fear",
+                "objective": "Repel the Jhen Mohran",
+                "monsters": "Jhen Mohran",
+                "client": "Guildmaster",
+            }
+        ],
     }
 )
 tcp_report({"type": "report", "mac": "02:00:00:00:00:02", "nickname": "Bravo", "name": "Second", "hall": "MHP3Q000"})
 
-players = get_players()["players"]
+data = get_players()
+players = data["players"]
 by_name = {player["name"]: player for player in players}
 assert "Tester" in by_name, by_name
 assert "Second" in by_name, by_name
 assert by_name["Tester"]["hr"] == 7
+assert by_name["Tester"]["title"] == "Village Hero"
+assert by_name["Tester"]["guild_card"] == "See you at the hall!"
 assert by_name["Tester"]["equipment"][0]["name"] == "Hunter Helm"
 assert by_name["Tester"]["weapon"]["name"] == "Iron Sword"
+halls = {hall["name"]: hall for hall in data["halls"]}
+assert "MHP3Q000" in halls, halls
+assert halls["MHP3Q000"]["quests"][0]["name"] == "The Festival of Fear"
+assert halls["MHP3Q000"]["quests"][0]["slot"] == 1
 
 with urllib.request.urlopen(HTTP + "/", timeout=5) as response:
     page = response.read().decode()

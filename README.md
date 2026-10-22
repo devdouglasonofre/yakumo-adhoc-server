@@ -100,9 +100,11 @@ Environment variables:
 `DASHBOARD_PORT` is deliberately not `PORT`: Railway may inject `PORT` from the
 TCP proxy's application port, and the HTTP server must stay on 8080.
 
-The dashboard keeps everything in memory, so a restart clears the board. The
-data is self-reported by each client; treat it as informational, not
-authoritative.
+The page groups the posted quests by gathering hall and shows each hunter's
+HR, guild card title and equipment. Clicking a hunter opens a Guild Card
+profile with the data that client reported. The dashboard keeps everything in
+memory, so a restart clears the board. The data is self-reported by each
+client; treat it as informational, not authoritative.
 
 ## Connect from Yakumo
 
@@ -152,6 +154,7 @@ vendor/yakumo/adhoc/    unmodified Yakumo adhoc sources (MIT)
 gateway/main.go         one-port protocol-aware TCP gateway
 docker/entrypoint.sh    runs both processes and forwards SIGTERM
 dashboard/              lobby dashboard service (own Dockerfile and railway.json)
+dashboard/page.html     the dashboard page (embedded in the Go binary)
 tests/                  protocol and dashboard smoke tests
 ```
 

@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -52,6 +53,20 @@ type Weapon struct {
 	Name string `json:"name,omitempty"`
 }
 
+// Quest is one quest posted on a gathering hall's board.
+type Quest struct {
+	Slot      int    `json:"slot"`
+	ID        uint16 `json:"id"`
+	Stars     int    `json:"stars"`
+	Fee       uint32 `json:"fee"`
+	Reward    uint32 `json:"reward"`
+	TimeLimit uint32 `json:"time_limit"` // frames at 30 a second
+	Name      string `json:"name"`
+	Objective string `json:"objective,omitempty"`
+	Monsters  string `json:"monsters,omitempty"`
+	Client    string `json:"client,omitempty"`
+}
+
 // Report is one message from a client, over HTTP or the TCP line protocol.
 type Report struct {
 	Version   int     `json:"v"`
@@ -68,6 +83,7 @@ type Report struct {
 	GuildCard string  `json:"guild_card,omitempty"`
 	Equipment []Piece `json:"equipment,omitempty"`
 	Weapon    *Weapon `json:"weapon,omitempty"`
+	Quests    []Quest `json:"quests,omitempty"`
 	Token     string  `json:"token,omitempty"`
 	Time      int64   `json:"ts,omitempty"`
 }
@@ -93,16 +109,24 @@ type Player struct {
 	Reports   int       `json:"reports"`
 }
 
-// Store keeps the last report of every player.
+// Hall is the board of one gathering hall.
+type Hall struct {
+	Name    string    `json:"name"`
+	Quests  []Quest   `json:"quests"`
+	Updated time.Time `json:"updated"`
+}
+
+// Store keeps the last report of every player and every hall's board.
 type Store struct {
 	mu      sync.Mutex
 	players map[string]*Player
+	halls   map[string]*Hall
 	now     func() time.Time
 }
 
 // NewStore makes an empty store.
 func NewStore() *Store {
-	return &Store{players: make(map[string]*Player), now: time.Now}
+	return &Store{players: make(map[string]*Player), halls: make(map[string]*Hall), now: time.Now}
 }
 
 // normalizeMAC accepts "aa:bb:cc:dd:ee:ff" or "aabbccddeeff" and returns the
@@ -185,6 +209,9 @@ func (s *Store) Apply(report Report) error {
 	if report.Weapon != nil {
 		player.Weapon = report.Weapon
 	}
+	if report.Hall != "" && report.Quests != nil {
+		s.halls[report.Hall] = &Hall{Name: report.Hall, Quests: report.Quests, Updated: now}
+	}
 	return nil
 }
 
@@ -227,6 +254,18 @@ func (s *Store) Count() int {
 	return len(s.players)
 }
 
+// Halls returns the boards, by hall name.
+func (s *Store) Halls() []Hall {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Hall, 0, len(s.halls))
+	for _, hall := range s.halls {
+		out = append(out, *hall)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 func tokenMatches(want, got string) bool {
 	if want == "" {
 		return true
@@ -254,6 +293,7 @@ func handler(store *Store, token string) http.Handler {
 			"v":       protocolVersion,
 			"online":  online,
 			"players": players,
+			"halls":   store.Halls(),
 		})
 	})
 	mux.HandleFunc("/api/report", func(w http.ResponseWriter, r *http.Request) {
@@ -377,82 +417,6 @@ func main() {
 }
 
 // page is the dashboard itself: one table, refreshed from /api/players.
-const page = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Yakumo Lobby</title>
-<style>
-:root { color-scheme: dark; }
-body { margin: 0; padding: 24px; background: #16131a; color: #e8e2ea;
-       font: 15px/1.45 system-ui, sans-serif; }
-h1 { margin: 0 0 4px; font-size: 22px; }
-p.lead { margin: 0 0 20px; color: #a89fae; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2c2632; vertical-align: top; }
-th { color: #b98335; font-weight: 600; }
-tr.offline { opacity: .45; }
-.hall { font-family: ui-monospace, monospace; }
-.equipment { color: #cfc6d4; }
-.empty { color: #a89fae; }
-</style>
-</head>
-<body>
-<h1>Yakumo Lobby</h1>
-<p class="lead" id="lead">Loading…</p>
-<table>
-<thead><tr><th>Hunter</th><th>HR</th><th>Hall</th><th>Equipment</th><th>Last seen</th></tr></thead>
-<tbody id="players"></tbody>
-</table>
-<script>
-async function refresh() {
-  try {
-    const response = await fetch('/api/players', { cache: 'no-store' });
-    const data = await response.json();
-    document.getElementById('lead').textContent =
-      data.online + ' of ' + data.players.length + ' hunter(s) on line';
-    const body = document.getElementById('players');
-    body.replaceChildren();
-    for (const player of data.players) {
-      const row = document.createElement('tr');
-      if (!player.online) row.className = 'offline';
-      const name = document.createElement('td');
-      name.textContent = (player.name || player.nickname || player.mac) +
-        (player.title ? ' — ' + player.title : '');
-      const hr = document.createElement('td');
-      hr.textContent = player.hr ? 'HR ' + player.hr : '';
-      const hall = document.createElement('td');
-      hall.className = 'hall';
-      hall.textContent = player.hall || '';
-      const equipment = document.createElement('td');
-      equipment.className = 'equipment';
-      const parts = [];
-      for (const piece of player.equipment || []) parts.push(piece.name || (piece.slot + ' #' + piece.id));
-      if (player.weapon) parts.push(player.weapon.name || ('weapon #' + player.weapon.id));
-      equipment.textContent = parts.join(', ');
-      const seen = document.createElement('td');
-      const seconds = Math.max(0, Math.round((Date.now() - Date.parse(player.last_seen)) / 1000));
-      seen.textContent = player.online ? 'now' : seconds + 's ago';
-      row.append(name, hr, hall, equipment, seen);
-      body.append(row);
-    }
-    if (data.players.length === 0) {
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 5;
-      cell.className = 'empty';
-      cell.textContent = 'Nobody has reported yet.';
-      row.append(cell);
-      body.append(row);
-    }
-  } catch (error) {
-    document.getElementById('lead').textContent = 'Cannot reach the dashboard: ' + error;
-  }
-}
-refresh();
-setInterval(refresh, 5000);
-</script>
-</body>
-</html>
-`
+//
+//go:embed page.html
+var page string
