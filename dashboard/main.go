@@ -18,8 +18,11 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -46,11 +49,13 @@ type Piece struct {
 	Name string `json:"name,omitempty"`
 }
 
-// Weapon is the carried weapon.
+// Weapon is the carried weapon. Type is the game's weapon class, for example
+// "Great Sword".
 type Weapon struct {
 	Kind uint8  `json:"kind"`
 	ID   uint16 `json:"id"`
 	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 // Quest is one quest posted on a gathering hall's board.
@@ -86,13 +91,20 @@ type Report struct {
 	Quests    []Quest `json:"quests,omitempty"`
 	Token     string  `json:"token,omitempty"`
 	Time      int64   `json:"ts,omitempty"`
+	// Full says the report is the client's whole state, so fields it leaves
+	// empty mean "nothing", not "not read yet". Reports from older clients
+	// leave it off and keep the merge behaviour.
+	Full bool `json:"full,omitempty"`
 }
 
-// Player is the stored state of one virtual MAC.
+// Player is the stored state of one virtual MAC. The MAC and the game's
+// product code stay internal: the API exposes a per-store opaque ID instead,
+// so the public board cannot be used to collect either.
 type Player struct {
-	MAC       string    `json:"mac"`
+	ID        string    `json:"id"`
+	MAC       string    `json:"-"`
 	Nickname  string    `json:"nickname"`
-	Product   string    `json:"product"`
+	Product   string    `json:"-"`
 	Server    string    `json:"server"`
 	Hall      string    `json:"hall"`
 	Name      string    `json:"name"`
@@ -122,11 +134,24 @@ type Store struct {
 	players map[string]*Player
 	halls   map[string]*Hall
 	now     func() time.Time
+	salt    [16]byte
 }
 
-// NewStore makes an empty store.
+// NewStore makes an empty store. The salt makes the public player IDs
+// unguessable from a MAC alone and changes when the service restarts.
 func NewStore() *Store {
-	return &Store{players: make(map[string]*Player), halls: make(map[string]*Hall), now: time.Now}
+	var salt [16]byte
+	_, _ = rand.Read(salt[:])
+	return &Store{players: make(map[string]*Player), halls: make(map[string]*Hall), now: time.Now, salt: salt}
+}
+
+// playerID is a short, non-reversible handle for a stored player. It is stable
+// for the life of the store and is all the public API exposes about identity.
+func (s *Store) playerID(mac string) string {
+	hash := sha256.New()
+	_, _ = hash.Write(s.salt[:])
+	_, _ = hash.Write([]byte(mac))
+	return hex.EncodeToString(hash.Sum(nil)[:8])
 }
 
 // normalizeMAC accepts "aa:bb:cc:dd:ee:ff" or "aabbccddeeff" and returns the
@@ -176,6 +201,26 @@ func (s *Store) Apply(report Report) error {
 	player.Online = true
 	player.Left = false
 	player.Reports++
+	if report.Full {
+		// The client sends its whole state in one report. Assign every field,
+		// including empty ones, so a value it no longer reads cannot linger
+		// from an older report (a guild card, a stale quest board, a rank).
+		player.Nickname = report.Nickname
+		player.Product = report.Product
+		player.Server = report.Server
+		player.Hall = report.Hall
+		player.Name = report.Name
+		player.Sex = report.Sex
+		player.HR = report.HR
+		player.Title = report.Title
+		player.GuildCard = report.GuildCard
+		player.Equipment = report.Equipment
+		player.Weapon = report.Weapon
+		if report.Hall != "" {
+			s.halls[report.Hall] = &Hall{Name: report.Hall, Quests: report.Quests, Updated: now}
+		}
+		return nil
+	}
 	if report.Nickname != "" {
 		player.Nickname = report.Nickname
 	}
@@ -224,6 +269,7 @@ func (s *Store) Snapshot() []Player {
 	out := make([]Player, 0, len(s.players))
 	for _, player := range s.players {
 		copy := *player
+		copy.ID = s.playerID(copy.MAC)
 		copy.Online = !copy.Left && now.Sub(copy.LastSeen) <= onlineWindow
 		out = append(out, copy)
 	}

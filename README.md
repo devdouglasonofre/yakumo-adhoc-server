@@ -101,8 +101,10 @@ Environment variables:
 TCP proxy's application port, and the HTTP server must stay on 8080.
 
 The page groups the posted quests by gathering hall and shows each hunter's
-HR, guild card title and equipment. Clicking a hunter opens a Guild Card
-profile with the data that client reported. The dashboard keeps everything in
+HR, guild card title and equipment, including the weapon's class. Clicking a
+hunter opens a Guild Card profile with the data that client reported. The
+public API does not expose the virtual MAC or the game's product code; the
+profile is keyed by an opaque per-run ID. The dashboard keeps everything in
 memory, so a restart clears the board. The data is self-reported by each
 client; treat it as informational, not authoritative.
 

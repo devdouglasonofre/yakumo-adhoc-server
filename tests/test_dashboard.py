@@ -50,7 +50,7 @@ post_report(
         "title": "Village Hero",
         "guild_card": "See you at the hall!",
         "equipment": [{"slot": "head", "id": 12, "name": "Hunter Helm"}],
-        "weapon": {"kind": 5, "id": 3, "name": "Iron Sword"},
+        "weapon": {"kind": 5, "id": 3, "name": "Iron Sword", "type": "Great Sword"},
         "quests": [
             {
                 "slot": 1,
@@ -79,6 +79,7 @@ assert by_name["Tester"]["title"] == "Village Hero"
 assert by_name["Tester"]["guild_card"] == "See you at the hall!"
 assert by_name["Tester"]["equipment"][0]["name"] == "Hunter Helm"
 assert by_name["Tester"]["weapon"]["name"] == "Iron Sword"
+assert by_name["Tester"]["weapon"]["type"] == "Great Sword"
 halls = {hall["name"]: hall for hall in data["halls"]}
 assert "MHP3Q000" in halls, halls
 assert halls["MHP3Q000"]["quests"][0]["name"] == "The Festival of Fear"

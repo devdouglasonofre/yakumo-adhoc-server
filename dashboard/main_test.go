@@ -51,7 +51,7 @@ func TestApplyAndSnapshot(t *testing.T) {
 		Title:     "Village Hero",
 		GuildCard: "See you at the hall!",
 		Equipment: []Piece{{Slot: "head", ID: 12, Name: "Hunter's Helm"}},
-		Weapon:    &Weapon{Kind: 5, ID: 3, Name: "Iron Sword"},
+		Weapon:    &Weapon{Kind: 5, ID: 3, Name: "Iron Sword", Type: "Great Sword"},
 		Quests: []Quest{{
 			Slot: 1, ID: 10522, Stars: 5, Fee: 800, Reward: 9600, TimeLimit: 36000,
 			Name: "The Festival of Fear", Objective: "Repel the Jhen Mohran", Monsters: "Jhen Mohran", Client: "Guildmaster",
@@ -72,8 +72,8 @@ func TestApplyAndSnapshot(t *testing.T) {
 	if len(player.Equipment) != 1 || player.Equipment[0].Name != "Hunter's Helm" {
 		t.Errorf("equipment = %+v; want the reported piece", player.Equipment)
 	}
-	if player.Weapon == nil || player.Weapon.Name != "Iron Sword" {
-		t.Errorf("weapon = %+v; want the reported weapon", player.Weapon)
+	if player.Weapon == nil || player.Weapon.Name != "Iron Sword" || player.Weapon.Type != "Great Sword" {
+		t.Errorf("weapon = %+v; want the reported weapon and class", player.Weapon)
 	}
 	if player.Title != "Village Hero" || player.GuildCard != "See you at the hall!" {
 		t.Errorf("guild card = %q / %q; want the reported title and comment", player.Title, player.GuildCard)
@@ -125,6 +125,70 @@ func TestInvalidMACIsRefused(t *testing.T) {
 	store := NewStore()
 	if err := store.Apply(Report{MAC: "not-a-mac"}); err == nil {
 		t.Error("Apply accepted an invalid MAC")
+	}
+}
+
+func TestFullReportClearsStaleFields(t *testing.T) {
+	store := NewStore()
+	mac := "02:00:00:00:00:01"
+	if err := store.Apply(Report{
+		Full:      true,
+		MAC:       mac,
+		Hall:      "MHP3Q000",
+		Name:      "Tester",
+		HR:        7,
+		Title:     "Rygart",
+		GuildCard: "fitz",
+		Weapon:    &Weapon{Kind: 5, ID: 3, Name: "Iron Sword", Type: "Great Sword"},
+		Quests: []Quest{{
+			Slot: 1, ID: 10522, Stars: 5, Name: "The Festival of Fear",
+		}},
+	}); err != nil {
+		t.Fatalf("Apply first report: %v", err)
+	}
+	if err := store.Apply(Report{
+		Full: true,
+		MAC:  mac,
+		Hall: "MHP3Q000",
+		Name: "Tester",
+		HR:   4,
+	}); err != nil {
+		t.Fatalf("Apply second report: %v", err)
+	}
+	player := store.Snapshot()[0]
+	if player.HR != 4 || player.Title != "" || player.GuildCard != "" || player.Weapon != nil {
+		t.Errorf("player = %+v; want the second report's state without stale fields", player)
+	}
+	halls := store.Halls()
+	if len(halls) != 1 || len(halls[0].Quests) != 0 {
+		t.Errorf("halls = %+v; want the board cleared by the full report", halls)
+	}
+}
+
+func TestPublicAPIHidesIdentity(t *testing.T) {
+	store := NewStore()
+	if err := store.Apply(Report{
+		MAC:     "02:00:00:00:00:01",
+		Product: "ULJM05800",
+		Hall:    "MHP3Q000",
+		Name:    "Tester",
+	}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	players := store.Snapshot()
+	if len(players) != 1 || players[0].ID == "" {
+		t.Fatalf("players = %+v; want one player with an opaque ID", players)
+	}
+	body, err := json.Marshal(players)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	text := string(body)
+	if strings.Contains(text, "02:00:00:00:00:01") || strings.Contains(text, "ULJM05800") {
+		t.Errorf("public players = %s; want no MAC or product code", text)
+	}
+	if !strings.Contains(text, `"id":"`) {
+		t.Errorf("public players = %s; want the opaque id", text)
 	}
 }
 
