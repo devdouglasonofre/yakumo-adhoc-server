@@ -218,7 +218,7 @@ section.block { margin-top: 26px; }
 </header>
 <main>
   <section class="block">
-    <div class="block-head"><h2>Gathering Halls</h2><span>Posted quests, by slot</span></div>
+    <div class="block-head"><h2>Gathering Halls</h2><span>Active quests, by hall</span></div>
     <div id="halls" class="halls"><p class="muted">Loading…</p></div>
   </section>
   <section class="block">
@@ -336,7 +336,7 @@ function renderHalls() {
     card.append(head);
     const quests = make('div', 'quests');
     if (!hall.quests || !hall.quests.length) {
-      quests.append(make('p', 'muted', 'No posted quests reported yet.'));
+      quests.append(make('p', 'muted', 'No active quest reported yet.'));
     } else {
       for (const quest of hall.quests) quests.append(questCard(quest));
     }
