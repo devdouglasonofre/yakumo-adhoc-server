@@ -1,40 +1,10 @@
-FROM debian:bookworm-slim AS server-build
+FROM alpine:3.20
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends g++ ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# The ad hoc server is a one-port gateway: matchmaking and relay both arrive
+# on 8080 and are classified by the gateway. This bridge exposes that same
+# endpoint on a second public TCP port, so clients that still derive the relay
+# port as "server port + 1" reach the unified server.
+RUN apk add --no-cache socat
 
-WORKDIR /src
-COPY vendor/yakumo/adhoc ./adhoc
-COPY src/server_main.cpp ./server_main.cpp
-
-RUN mkdir -p /out \
-    && g++ -std=c++20 -O2 -pthread -I. adhoc/server.cpp server_main.cpp -o /out/yakumo-adhoc-server
-
-
-FROM golang:1.24-bookworm AS gateway-build
-
-WORKDIR /src
-COPY gateway/go.mod gateway/main.go ./
-
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/yakumo-adhoc-gateway .
-
-
-FROM debian:bookworm-slim
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=server-build /out/yakumo-adhoc-server /usr/local/bin/yakumo-adhoc-server
-COPY --from=gateway-build /out/yakumo-adhoc-gateway /usr/local/bin/yakumo-adhoc-gateway
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-ENV GATEWAY_PORT=8080
-ENV ADHOC_PORT=27312
 EXPOSE 8080
-EXPOSE 27312
-EXPOSE 27313
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["socat", "TCP-LISTEN:8080,fork,reuseaddr", "TCP:yakumo-adhoc.railway.internal:8080"]
