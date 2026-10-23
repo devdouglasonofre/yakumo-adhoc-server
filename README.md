@@ -101,10 +101,14 @@ Environment variables:
 TCP proxy's application port, and the HTTP server must stay on 8080.
 
 The page groups the posted quests by gathering hall and shows each hunter's
-HR, guild card title and equipment, including the weapon's class. Halls are
-labelled by their order ("Hall 1", "Hall 2") instead of the game's own group
-id. Clicking a hunter opens a Guild Card profile with the data that client
-reported: play time, FS level, quest counts, weapon usage and recent quests.
+HR, guild card title and equipment, including the weapon's class. Each active
+quest card shows the game's real title and objective, the quest zone and
+minimum HR, stars, fee, reward, time limit, poster, running time, and the hall
+password/note when the client can read them; board slots are not shown. Halls
+are labelled by their order ("Hall 1", "Hall 2") instead of the game's own
+group id. Clicking a hunter opens a Guild Card profile with the data that
+client reported: play time, FS level, quest counts, weapon usage and recent
+quests.
 The public API does not expose the virtual MAC or the game's
 product code; the profile is keyed by an opaque per-run ID. The dashboard
 keeps everything in memory, so a restart clears the board. The data is
