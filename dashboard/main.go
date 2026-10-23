@@ -58,6 +58,23 @@ type Weapon struct {
 	Type string `json:"type,omitempty"`
 }
 
+// StatCount is one labelled number from a guild card: a quest count or a
+// weapon-use count.
+type StatCount struct {
+	Label string `json:"label"`
+	Count uint32 `json:"count"`
+}
+
+// GuildStats is the summary shown on a player's Guild Card.
+type GuildStats struct {
+	Quests       []StatCount `json:"quests,omitempty"`
+	FSLevel      uint32      `json:"fs_level,omitempty"`
+	PlaySeconds  uint32      `json:"play_seconds,omitempty"`
+	Weapons      []StatCount `json:"weapons,omitempty"`
+	RecentQuests []string    `json:"recent_quests,omitempty"`
+	Awards       uint32      `json:"awards,omitempty"`
+}
+
 // Quest is one quest posted on a gathering hall's board.
 type Quest struct {
 	Slot      int    `json:"slot"`
@@ -70,27 +87,31 @@ type Quest struct {
 	Objective string `json:"objective,omitempty"`
 	Monsters  string `json:"monsters,omitempty"`
 	Client    string `json:"client,omitempty"`
+	Accepted  string `json:"accepted,omitempty"`
+	Password  string `json:"password,omitempty"`
+	StartedAt string `json:"started_at,omitempty"`
 }
 
 // Report is one message from a client, over HTTP or the TCP line protocol.
 type Report struct {
-	Version   int     `json:"v"`
-	Type      string  `json:"type"` // "report" (default), "leave" or "event"
-	MAC       string  `json:"mac"`
-	Nickname  string  `json:"nickname"`
-	Product   string  `json:"product"`
-	Server    string  `json:"server"`
-	Hall      string  `json:"hall"`
-	Name      string  `json:"name"`
-	Sex       string  `json:"sex"`
-	HR        int     `json:"hr"`
-	Title     string  `json:"title"`
-	GuildCard string  `json:"guild_card,omitempty"`
-	Equipment []Piece `json:"equipment,omitempty"`
-	Weapon    *Weapon `json:"weapon,omitempty"`
-	Quests    []Quest `json:"quests,omitempty"`
-	Token     string  `json:"token,omitempty"`
-	Time      int64   `json:"ts,omitempty"`
+	Version   int         `json:"v"`
+	Type      string      `json:"type"` // "report" (default), "leave" or "event"
+	MAC       string      `json:"mac"`
+	Nickname  string      `json:"nickname"`
+	Product   string      `json:"product"`
+	Server    string      `json:"server"`
+	Hall      string      `json:"hall"`
+	Name      string      `json:"name"`
+	Sex       string      `json:"sex"`
+	HR        int         `json:"hr"`
+	Title     string      `json:"title"`
+	GuildCard string      `json:"guild_card,omitempty"`
+	Equipment []Piece     `json:"equipment,omitempty"`
+	Weapon    *Weapon     `json:"weapon,omitempty"`
+	Quests    []Quest     `json:"quests,omitempty"`
+	Stats     *GuildStats `json:"stats,omitempty"`
+	Token     string      `json:"token,omitempty"`
+	Time      int64       `json:"ts,omitempty"`
 	// Full says the report is the client's whole state, so fields it leaves
 	// empty mean "nothing", not "not read yet". Reports from older clients
 	// leave it off and keep the merge behaviour.
@@ -101,29 +122,32 @@ type Report struct {
 // product code stay internal: the API exposes a per-store opaque ID instead,
 // so the public board cannot be used to collect either.
 type Player struct {
-	ID        string    `json:"id"`
-	MAC       string    `json:"-"`
-	Nickname  string    `json:"nickname"`
-	Product   string    `json:"-"`
-	Server    string    `json:"server"`
-	Hall      string    `json:"hall"`
-	Name      string    `json:"name"`
-	Sex       string    `json:"sex"`
-	HR        int       `json:"hr"`
-	Title     string    `json:"title"`
-	GuildCard string    `json:"guild_card,omitempty"`
-	Equipment []Piece   `json:"equipment,omitempty"`
-	Weapon    *Weapon   `json:"weapon,omitempty"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
-	Online    bool      `json:"online"`
-	Left      bool      `json:"left,omitempty"`
-	Reports   int       `json:"reports"`
+	ID        string      `json:"id"`
+	MAC       string      `json:"-"`
+	Nickname  string      `json:"nickname"`
+	Product   string      `json:"-"`
+	Server    string      `json:"server"`
+	Hall      string      `json:"hall"`
+	Name      string      `json:"name"`
+	Sex       string      `json:"sex"`
+	HR        int         `json:"hr"`
+	Title     string      `json:"title"`
+	GuildCard string      `json:"guild_card,omitempty"`
+	Equipment []Piece     `json:"equipment,omitempty"`
+	Weapon    *Weapon     `json:"weapon,omitempty"`
+	Stats     *GuildStats `json:"stats,omitempty"`
+	FirstSeen time.Time   `json:"first_seen"`
+	LastSeen  time.Time   `json:"last_seen"`
+	Online    bool        `json:"online"`
+	Left      bool        `json:"left,omitempty"`
+	Reports   int         `json:"reports"`
 }
 
-// Hall is the board of one gathering hall.
+// Hall is the board of one gathering hall. Label is the public, stable name
+// shown to players ("Hall 1"); Name is the game's own group id.
 type Hall struct {
 	Name    string    `json:"name"`
+	Label   string    `json:"label,omitempty"`
 	Quests  []Quest   `json:"quests"`
 	Updated time.Time `json:"updated"`
 }
@@ -216,6 +240,7 @@ func (s *Store) Apply(report Report) error {
 		player.GuildCard = report.GuildCard
 		player.Equipment = report.Equipment
 		player.Weapon = report.Weapon
+		player.Stats = report.Stats
 		if report.Hall != "" {
 			s.halls[report.Hall] = &Hall{Name: report.Hall, Quests: report.Quests, Updated: now}
 		}
@@ -253,6 +278,9 @@ func (s *Store) Apply(report Report) error {
 	}
 	if report.Weapon != nil {
 		player.Weapon = report.Weapon
+	}
+	if report.Stats != nil {
+		player.Stats = report.Stats
 	}
 	if report.Hall != "" && report.Quests != nil {
 		s.halls[report.Hall] = &Hall{Name: report.Hall, Quests: report.Quests, Updated: now}
@@ -309,6 +337,9 @@ func (s *Store) Halls() []Hall {
 		out = append(out, *hall)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	for i := range out {
+		out[i].Label = fmt.Sprintf("Hall %d", i+1)
+	}
 	return out
 }
 

@@ -56,6 +56,14 @@ func TestApplyAndSnapshot(t *testing.T) {
 			Slot: 1, ID: 10522, Stars: 5, Fee: 800, Reward: 9600, TimeLimit: 36000,
 			Name: "The Festival of Fear", Objective: "Repel the Jhen Mohran", Monsters: "Jhen Mohran", Client: "Guildmaster",
 		}},
+		Stats: &GuildStats{
+			Quests:       []StatCount{{Label: "Village", Count: 12}, {Label: "Low Rank", Count: 34}},
+			FSLevel:      23,
+			PlaySeconds:  3661,
+			Weapons:      []StatCount{{Label: "Sword and Shield", Count: 10}},
+			RecentQuests: []string{"The Festival of Fear"},
+			Awards:       2,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -78,9 +86,14 @@ func TestApplyAndSnapshot(t *testing.T) {
 	if player.Title != "Village Hero" || player.GuildCard != "See you at the hall!" {
 		t.Errorf("guild card = %q / %q; want the reported title and comment", player.Title, player.GuildCard)
 	}
+	if player.Stats == nil || player.Stats.FSLevel != 23 || player.Stats.PlaySeconds != 3661 ||
+		len(player.Stats.Weapons) != 1 || player.Stats.Awards != 2 {
+		t.Errorf("stats = %+v; want the reported guild card summary", player.Stats)
+	}
 	halls := store.Halls()
-	if len(halls) != 1 || halls[0].Name != "MHP3Q000" || len(halls[0].Quests) != 1 || halls[0].Quests[0].Name != "The Festival of Fear" {
-		t.Errorf("halls = %+v; want the posted quest under the hall", halls)
+	if len(halls) != 1 || halls[0].Name != "MHP3Q000" || halls[0].Label != "Hall 1" ||
+		len(halls[0].Quests) != 1 || halls[0].Quests[0].Name != "The Festival of Fear" {
+		t.Errorf("halls = %+v; want the posted quest under Hall 1", halls)
 	}
 
 	now = now.Add(2 * onlineWindow)
@@ -121,6 +134,20 @@ func TestPartialReportKeepsEquipment(t *testing.T) {
 	}
 }
 
+func TestHallLabelsFollowSortedOrder(t *testing.T) {
+	store := NewStore()
+	for _, hall := range []string{"MHP3Q010", "MHP3Q002"} {
+		if err := store.Apply(Report{Full: true, MAC: "02:00:00:00:00:01", Hall: hall, Name: "Tester"}); err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+	}
+	halls := store.Halls()
+	if len(halls) != 2 || halls[0].Name != "MHP3Q002" || halls[0].Label != "Hall 1" ||
+		halls[1].Name != "MHP3Q010" || halls[1].Label != "Hall 2" {
+		t.Errorf("halls = %+v; want sorted Hall 1 and Hall 2 labels", halls)
+	}
+}
+
 func TestInvalidMACIsRefused(t *testing.T) {
 	store := NewStore()
 	if err := store.Apply(Report{MAC: "not-a-mac"}); err == nil {
@@ -143,6 +170,7 @@ func TestFullReportClearsStaleFields(t *testing.T) {
 		Quests: []Quest{{
 			Slot: 1, ID: 10522, Stars: 5, Name: "The Festival of Fear",
 		}},
+		Stats: &GuildStats{FSLevel: 23, Awards: 2},
 	}); err != nil {
 		t.Fatalf("Apply first report: %v", err)
 	}
@@ -156,7 +184,7 @@ func TestFullReportClearsStaleFields(t *testing.T) {
 		t.Fatalf("Apply second report: %v", err)
 	}
 	player := store.Snapshot()[0]
-	if player.HR != 4 || player.Title != "" || player.GuildCard != "" || player.Weapon != nil {
+	if player.HR != 4 || player.Title != "" || player.GuildCard != "" || player.Weapon != nil || player.Stats != nil {
 		t.Errorf("player = %+v; want the second report's state without stale fields", player)
 	}
 	halls := store.Halls()

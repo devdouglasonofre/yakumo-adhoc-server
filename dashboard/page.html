@@ -176,7 +176,21 @@ section.block { margin-top: 26px; }
   cursor: pointer;
 }
 .profile .close:hover { color: var(--text); border-color: var(--gold); }
+.profile-stats { margin-top: 18px; display: grid; gap: 12px; }
+.profile-stats h3 { margin: 0 0 8px; color: var(--gold-soft); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.stat-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(31, 24, 36, .55); }
+.stat-box h4 { margin: 0 0 8px; font-size: 13px; }
+.stat-total { margin: 0 0 9px; color: var(--gold-soft); font-size: 12px; }
+.stat-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.stat-row .stat-name { flex: 0 0 118px; color: var(--muted); }
+.stat-bar { flex: 1; height: 6px; border-radius: 999px; background: #2b1f2b; overflow: hidden; }
+.stat-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); }
+.stat-count { min-width: 34px; text-align: right; color: var(--text); }
+.recent-quests { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: #d8c9dd; font-size: 12px; }
 @media (max-width: 900px) {
+  .stat-columns { grid-template-columns: 1fr; }
   .quests { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hunters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -228,11 +242,12 @@ section.block { margin-top: 26px; }
         <ul id="profile-equipment"></ul>
       </div>
     </div>
+    <div id="profile-stats" class="profile-stats"></div>
   </section>
 </div>
 
 <script>
-const state = { players: [], halls: [], byId: new Map() };
+const state = { players: [], halls: [], byId: new Map(), hallLabels: new Map() };
 
 function make(tag, className, text) {
   const node = document.createElement(tag);
@@ -247,6 +262,16 @@ function clear(node) {
 
 function playerName(player) {
   return player.name || player.nickname || player.id;
+}
+
+function hallLabel(name) {
+  return state.hallLabels.get(name) || name;
+}
+
+function playTime(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours + 'h ' + minutes + 'm';
 }
 
 function initials(player) {
@@ -275,14 +300,17 @@ function equipmentText(player) {
 function questCard(quest) {
   const card = make('article', 'quest');
   const top = make('div', 'quest-top');
-  top.append(make('span', 'slot', 'Slot ' + quest.slot));
   top.append(make('span', 'stars', '★'.repeat(Math.max(1, Math.min(8, quest.stars || 1)))));
+  top.append(make('span', 'slot', 'Quest'));
   card.append(top);
   card.append(make('h3', '', quest.name || ('Quest #' + quest.id)));
   const meta = [];
-  if (quest.client) meta.push('Client: ' + quest.client);
-  if (quest.monsters) meta.push('Main: ' + quest.monsters);
+  if (quest.client) meta.push('Posted by: ' + quest.client);
+  if (quest.accepted) meta.push('Accepted: ' + quest.accepted);
+  if (quest.monsters) meta.push('Target: ' + quest.monsters);
   if (quest.objective) meta.push(quest.objective);
+  if (quest.started_at) meta.push('Running: ' + ago(quest.started_at));
+  if (quest.password) meta.push('Password: ' + quest.password);
   if (meta.length) card.append(make('p', 'meta', meta.join(' · ')));
   const foot = [];
   if (quest.fee) foot.push('Fee ' + quest.fee + 'z');
@@ -302,7 +330,7 @@ function renderHalls() {
   for (const hall of state.halls) {
     const card = make('article', 'hall-card');
     const head = make('div', 'hall-head');
-    head.append(make('h2', '', hall.name));
+    head.append(make('h2', '', hall.label || hall.name));
     const count = state.players.filter(player => player.hall === hall.name).length;
     head.append(make('span', 'pill', count + ' hunter' + (count === 1 ? '' : 's')));
     card.append(head);
@@ -336,7 +364,7 @@ function renderHunters() {
     body.append(line);
     const meta = [];
     if (player.hr) meta.push('HR ' + player.hr);
-    if (player.hall) meta.push(player.hall);
+    if (player.hall) meta.push(hallLabel(player.hall));
     meta.push(ago(player.last_seen));
     body.append(make('span', 'hunter-meta', meta.join(' · ')));
     body.append(make('span', 'equipment', equipmentText(player)));
@@ -352,19 +380,73 @@ function row(label, value) {
   return line;
 }
 
+function statList(items) {
+  const list = make('ul', 'stat-list');
+  const top = Math.max(1, ...items.map(item => item.count || 0));
+  for (const item of items) {
+    const line = make('li', 'stat-row');
+    line.append(make('span', 'stat-name', item.label));
+    const bar = make('span', 'stat-bar');
+    const fill = make('span');
+    fill.style.width = Math.max(2, Math.round((item.count || 0) / top * 100)) + '%';
+    bar.append(fill);
+    line.append(bar, make('span', 'stat-count', item.count || 0));
+    list.append(line);
+  }
+  return list;
+}
+
+function renderProfileStats(player) {
+  const root = document.getElementById('profile-stats');
+  clear(root);
+  const stats = player.stats;
+  if (!stats || (!stats.quests?.length && !stats.weapons?.length && !stats.recent_quests?.length &&
+      !stats.fs_level && !stats.awards)) {
+    root.append(make('p', 'muted', 'No guild card summary reported yet.'));
+    return;
+  }
+  const columns = make('div', 'stat-columns');
+  if (stats.quests?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Quests completed'));
+    const total = stats.quests.reduce((sum, quest) => sum + (quest.count || 0), 0);
+    box.append(make('p', 'stat-total', total + ' completed'));
+    box.append(statList(stats.quests));
+    columns.append(box);
+  }
+  if (stats.weapons?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Weapon usage'));
+    box.append(statList(stats.weapons.slice(0, 6)));
+    columns.append(box);
+  }
+  if (columns.childNodes.length) root.append(columns);
+  if (stats.recent_quests?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Recent quests'));
+    const list = make('ul', 'recent-quests');
+    for (const quest of stats.recent_quests) list.append(make('li', '', quest));
+    box.append(list);
+    root.append(box);
+  }
+}
+
 function openProfile(id) {
   const player = state.byId.get(id);
   if (!player) return;
   document.getElementById('profile-name').textContent = playerName(player);
   const subtitle = [];
   if (player.nickname && player.nickname !== player.name) subtitle.push('Nickname: ' + player.nickname);
-  if (player.title) subtitle.push(player.title);
+  if (player.title) subtitle.push('Title: ' + player.title);
   document.getElementById('profile-sub').textContent = subtitle.join(' · ');
   const body = document.getElementById('profile-body');
   clear(body);
+  const stats = player.stats || {};
   body.append(row('HR', player.hr ? 'HR ' + player.hr : ''));
-  body.append(row('Hall', player.hall));
-  body.append(row('Guild Card', player.guild_card));
+  body.append(row('Hall', player.hall ? hallLabel(player.hall) : ''));
+  body.append(row('Play time', stats.play_seconds ? playTime(stats.play_seconds) : ''));
+  body.append(row('FS level', stats.fs_level));
+  body.append(row('Awards', stats.awards));
   body.append(row('First seen', player.first_seen ? new Date(player.first_seen).toLocaleString() : ''));
   body.append(row('Last seen', player.online ? 'now' : ago(player.last_seen)));
   body.append(row('Reports', player.reports));
@@ -378,6 +460,7 @@ function openProfile(id) {
     equipment.append(make('li', '', weapon + ' — ' + (player.weapon.type || 'weapon')));
   }
   if (!equipment.childNodes.length) equipment.append(make('li', 'muted', 'No equipment reported.'));
+  renderProfileStats(player);
   document.getElementById('profile').hidden = false;
   document.body.classList.add('modal-open');
 }
@@ -394,6 +477,7 @@ async function refresh() {
     state.players = data.players || [];
     state.halls = data.halls || [];
     state.byId = new Map(state.players.map(player => [player.id, player]));
+    state.hallLabels = new Map(state.halls.map(hall => [hall.name, hall.label || hall.name]));
     document.getElementById('online').textContent = data.online;
     document.getElementById('hall-count').textContent = state.halls.length + ' hall' + (state.halls.length === 1 ? '' : 's');
     document.getElementById('status').textContent = '';

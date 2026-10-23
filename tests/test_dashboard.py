@@ -51,6 +51,14 @@ post_report(
         "guild_card": "See you at the hall!",
         "equipment": [{"slot": "head", "id": 12, "name": "Hunter Helm"}],
         "weapon": {"kind": 5, "id": 3, "name": "Iron Sword", "type": "Great Sword"},
+        "stats": {
+            "quests": [{"label": "Village", "count": 12}],
+            "fs_level": 23,
+            "play_seconds": 3661,
+            "weapons": [{"label": "Sword and Shield", "count": 10}],
+            "recent_quests": ["The Festival of Fear"],
+            "awards": 2,
+        },
         "quests": [
             {
                 "slot": 1,
@@ -80,10 +88,12 @@ assert by_name["Tester"]["guild_card"] == "See you at the hall!"
 assert by_name["Tester"]["equipment"][0]["name"] == "Hunter Helm"
 assert by_name["Tester"]["weapon"]["name"] == "Iron Sword"
 assert by_name["Tester"]["weapon"]["type"] == "Great Sword"
+assert by_name["Tester"]["stats"]["fs_level"] == 23
+assert by_name["Tester"]["stats"]["weapons"][0]["label"] == "Sword and Shield"
 halls = {hall["name"]: hall for hall in data["halls"]}
 assert "MHP3Q000" in halls, halls
+assert halls["MHP3Q000"]["label"] == "Hall 1"
 assert halls["MHP3Q000"]["quests"][0]["name"] == "The Festival of Fear"
-assert halls["MHP3Q000"]["quests"][0]["slot"] == 1
 
 with urllib.request.urlopen(HTTP + "/", timeout=5) as response:
     page = response.read().decode()
