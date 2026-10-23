@@ -15,8 +15,9 @@ Commit: `4a5debda0affe97e03722d1a58e77c4f2de2c7ab`
 Licence: MIT (see `vendor/yakumo/LICENSE`)
 
 The extraction entry point (`src/server_main.cpp`), the Railway gateway
-(`gateway/main.go`), the container files and the tests in this repository are
-original code released under the MIT licence in `LICENSE`.
+(`gateway/main.go`), the lobby dashboard (`dashboard/`), the container files
+and the tests in this repository are original code released under the MIT
+licence in `LICENSE`.
 
 No game assets, disc images, executable code, generated recompiled code or
 save data are included.

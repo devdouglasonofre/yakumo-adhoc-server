@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yakumo Lobby</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #120f15;
+  --bg-soft: #19141d;
+  --card: #1f1824;
+  --card-2: #261d2c;
+  --line: #382b40;
+  --text: #f0e9f2;
+  --muted: #a99caf;
+  --gold: #d7a54b;
+  --gold-soft: #f0c67a;
+  --red: #c64f4f;
+  --green: #58b878;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, #2b1a26 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, #3a2019 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+body.modal-open { overflow: hidden; }
+a { color: var(--gold-soft); }
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 12px;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  color: var(--gold-soft);
+  font: 700 24px/1 Georgia, serif;
+  background: linear-gradient(145deg, #2a1c21, #1a131b);
+  box-shadow: 0 0 24px rgba(215, 165, 75, .18);
+}
+h1 { margin: 0; font: 700 24px/1.15 Georgia, serif; letter-spacing: .01em; }
+.brand p { margin: 3px 0 0; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(31, 24, 36, .8);
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .03em;
+}
+.pill strong { color: var(--text); font-weight: 600; }
+main { max-width: 1180px; margin: 0 auto; padding: 10px 24px 60px; }
+section.block { margin-top: 26px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.block-head h2 { margin: 0; font: 600 17px/1.2 Georgia, serif; }
+.block-head span { color: var(--muted); font-size: 12px; }
+.muted { color: var(--muted); }
+.halls { display: grid; gap: 14px; }
+.hall-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(38, 29, 44, .92), rgba(25, 20, 29, .92));
+  padding: 16px;
+}
+.hall-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.hall-head h2 { margin: 0; font: 600 18px/1.2 Georgia, serif; }
+.hall-head .pill { margin-left: auto; }
+.quests { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.quest {
+  border: 1px solid #3b2b32;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: linear-gradient(155deg, #241a20, #1b151a);
+  min-width: 0;
+}
+.quest-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.slot { color: var(--gold-soft); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.stars { color: var(--gold); font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
+.quest h3 { margin: 7px 0 4px; font-size: 13px; line-height: 1.3; }
+.quest .meta { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.quest-foot { margin: 7px 0 0; color: #c8b8cf; font-size: 11px; }
+.hunters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.hunter {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(160deg, rgba(38, 29, 44, .9), rgba(24, 18, 28, .9));
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color .15s ease, transform .15s ease, background .15s ease;
+}
+.hunter:hover, .hunter:focus-visible { border-color: var(--gold); transform: translateY(-1px); outline: none; }
+.hunter.offline { opacity: .55; }
+.avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid #4a3540;
+  background: #2a1e26;
+  color: var(--gold-soft);
+  font: 700 13px/1 Georgia, serif;
+}
+.hunter-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hunter-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+.hunter-line strong { font-size: 14px; }
+.hunter-line .title { color: var(--gold-soft); font-size: 12px; }
+.hunter-meta { color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+.equipment { color: #cbbdd2; font-size: 11px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.status { margin-top: 18px; color: var(--muted); font-size: 12px; }
+.modal[hidden] { display: none; }
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; }
+.backdrop { position: absolute; inset: 0; background: rgba(8, 5, 10, .72); backdrop-filter: blur(4px); }
+.profile {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: min(84vh, 760px);
+  overflow: auto;
+  border: 1px solid var(--gold);
+  border-radius: 18px;
+  padding: 22px;
+  background: linear-gradient(160deg, #2a1f2a, #171218);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+}
+.eyebrow { margin: 0; color: var(--gold-soft); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+.profile h2 { margin: 6px 0 2px; font: 700 26px/1.15 Georgia, serif; }
+.profile .sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+.profile-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
+.profile dl { margin: 0; display: grid; gap: 8px; }
+.profile .row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: baseline; }
+.profile dt { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.profile dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.profile h3 { margin: 0 0 8px; color: var(--gold-soft); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.profile ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; }
+.profile .close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #201820;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.profile .close:hover { color: var(--text); border-color: var(--gold); }
+.profile-stats { margin-top: 18px; display: grid; gap: 12px; }
+.profile-stats h3 { margin: 0 0 8px; color: var(--gold-soft); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.stat-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(31, 24, 36, .55); }
+.stat-box h4 { margin: 0 0 8px; font-size: 13px; }
+.stat-total { margin: 0 0 9px; color: var(--gold-soft); font-size: 12px; }
+.stat-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.stat-row .stat-name { flex: 0 0 118px; color: var(--muted); }
+.stat-bar { flex: 1; height: 6px; border-radius: 999px; background: #2b1f2b; overflow: hidden; }
+.stat-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); }
+.stat-count { min-width: 34px; text-align: right; color: var(--text); }
+.recent-quests { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: #d8c9dd; font-size: 12px; }
+@media (max-width: 900px) {
+  .stat-columns { grid-template-columns: 1fr; }
+  .quests { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hunters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  header, main { padding-left: 14px; padding-right: 14px; }
+  .quests, .hunters, .profile-grid { grid-template-columns: 1fr; }
+  .profile .row { grid-template-columns: 82px 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark">Y</span>
+    <div>
+      <h1>Yakumo Lobby</h1>
+      <p>Guild Hall board &amp; hunter profiles</p>
+    </div>
+  </div>
+  <div class="stats">
+    <span class="pill"><strong id="online">…</strong> online</span>
+    <span class="pill"><strong id="hall-count">…</strong></span>
+    <span class="pill">auto refresh · 5s</span>
+  </div>
+</header>
+<main>
+  <section class="block">
+    <div class="block-head"><h2>Gathering Halls</h2><span>Active quests, by hall</span></div>
+    <div id="halls" class="halls"><p class="muted">Loading…</p></div>
+  </section>
+  <section class="block">
+    <div class="block-head"><h2>Hunters</h2><span>Click a hunter for the Guild Card</span></div>
+    <div id="hunters" class="hunters"><p class="muted">Loading…</p></div>
+  </section>
+  <p id="status" class="status"></p>
+</main>
+
+<div id="profile" class="modal" hidden>
+  <div id="profile-backdrop" class="backdrop"></div>
+  <section class="profile" role="dialog" aria-modal="true" aria-labelledby="profile-name">
+    <button id="profile-close" class="close" aria-label="Close">×</button>
+    <p class="eyebrow">Guild Card</p>
+    <h2 id="profile-name"></h2>
+    <p id="profile-sub" class="sub"></p>
+    <div class="profile-grid">
+      <dl id="profile-body"></dl>
+      <div>
+        <h3>Equipment</h3>
+        <ul id="profile-equipment"></ul>
+      </div>
+    </div>
+    <div id="profile-stats" class="profile-stats"></div>
+  </section>
+</div>
+
+<script>
+const state = { players: [], halls: [], byId: new Map(), hallLabels: new Map() };
+
+function make(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function playerName(player) {
+  return player.name || player.nickname || player.id;
+}
+
+function hallLabel(name) {
+  return state.hallLabels.get(name) || name;
+}
+
+function playTime(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours + 'h ' + minutes + 'm';
+}
+
+function initials(player) {
+  const name = playerName(player).trim();
+  return name ? name.slice(0, 2).toUpperCase() : '??';
+}
+
+function ago(iso) {
+  const seconds = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (seconds < 5) return 'now';
+  if (seconds < 60) return seconds + 's ago';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return minutes + 'm ago';
+  return Math.round(minutes / 60) + 'h ago';
+}
+
+function equipmentText(player) {
+  const parts = (player.equipment || []).map(piece => piece.name || (piece.slot + ' #' + piece.id));
+  if (player.weapon) {
+    const weapon = player.weapon.name || ('weapon #' + player.weapon.id);
+    parts.push(player.weapon.type ? weapon + ' (' + player.weapon.type + ')' : weapon);
+  }
+  return parts.join(' · ') || 'No equipment reported';
+}
+
+function questCard(quest) {
+  const card = make('article', 'quest');
+  const top = make('div', 'quest-top');
+  top.append(make('span', 'stars', '★'.repeat(Math.max(1, Math.min(8, quest.stars || 1)))));
+  top.append(make('span', 'slot', 'Quest'));
+  card.append(top);
+  card.append(make('h3', '', quest.name || ('Quest #' + quest.id)));
+  const meta = [];
+  const poster = quest.poster || quest.client;
+  if (poster) meta.push('Posted by: ' + poster);
+  if (quest.accepted) meta.push('Accepted: ' + quest.accepted);
+  if (quest.zone) meta.push('Zone: ' + quest.zone);
+  if (quest.min_hr) meta.push('Min. HR: ' + quest.min_hr);
+  if (quest.monsters) meta.push('Also present: ' + quest.monsters);
+  if (quest.objective) meta.push(quest.objective);
+  if (quest.started_at) meta.push('Running: ' + ago(quest.started_at));
+  if (quest.password) meta.push('Password: ' + quest.password);
+  if (quest.note) meta.push('Note: ' + quest.note);
+  if (meta.length) card.append(make('p', 'meta', meta.join(' · ')));
+  const foot = [];
+  if (quest.fee) foot.push('Fee ' + quest.fee + 'z');
+  if (quest.reward) foot.push('Reward ' + quest.reward + 'z');
+  if (quest.time_limit) foot.push(Math.round(quest.time_limit / 1800) + ' min');
+  if (foot.length) card.append(make('p', 'quest-foot', foot.join(' · ')));
+  return card;
+}
+
+function renderHalls() {
+  const root = document.getElementById('halls');
+  clear(root);
+  if (!state.halls.length) {
+    root.append(make('p', 'muted', 'No hall has reported a board yet.'));
+    return;
+  }
+  for (const hall of state.halls) {
+    const card = make('article', 'hall-card');
+    const head = make('div', 'hall-head');
+    head.append(make('h2', '', hall.label || hall.name));
+    const count = state.players.filter(player => player.hall === hall.name).length;
+    head.append(make('span', 'pill', count + ' hunter' + (count === 1 ? '' : 's')));
+    card.append(head);
+    const quests = make('div', 'quests');
+    if (!hall.quests || !hall.quests.length) {
+      quests.append(make('p', 'muted', 'No active quest reported yet.'));
+    } else {
+      for (const quest of hall.quests) quests.append(questCard(quest));
+    }
+    card.append(quests);
+    root.append(card);
+  }
+}
+
+function renderHunters() {
+  const root = document.getElementById('hunters');
+  clear(root);
+  if (!state.players.length) {
+    root.append(make('p', 'muted', 'No hunter has reported yet.'));
+    return;
+  }
+  for (const player of state.players) {
+    const card = make('button', 'hunter' + (player.online ? ' online' : ' offline'));
+    card.type = 'button';
+    card.addEventListener('click', () => openProfile(player.id));
+    const avatar = make('span', 'avatar', initials(player));
+    const body = make('span', 'hunter-body');
+    const line = make('span', 'hunter-line');
+    line.append(make('strong', '', playerName(player)));
+    if (player.title) line.append(make('span', 'title', player.title));
+    body.append(line);
+    const meta = [];
+    if (player.hr) meta.push('HR ' + player.hr);
+    if (player.hall) meta.push(hallLabel(player.hall));
+    meta.push(ago(player.last_seen));
+    body.append(make('span', 'hunter-meta', meta.join(' · ')));
+    body.append(make('span', 'equipment', equipmentText(player)));
+    card.append(avatar, body);
+    root.append(card);
+  }
+}
+
+function row(label, value) {
+  const line = make('div', 'row');
+  line.append(make('dt', '', label));
+  line.append(make('dd', '', value === undefined || value === null || value === '' ? '—' : value));
+  return line;
+}
+
+function statList(items) {
+  const list = make('ul', 'stat-list');
+  const top = Math.max(1, ...items.map(item => item.count || 0));
+  for (const item of items) {
+    const line = make('li', 'stat-row');
+    line.append(make('span', 'stat-name', item.label));
+    const bar = make('span', 'stat-bar');
+    const fill = make('span');
+    fill.style.width = Math.max(2, Math.round((item.count || 0) / top * 100)) + '%';
+    bar.append(fill);
+    line.append(bar, make('span', 'stat-count', item.count || 0));
+    list.append(line);
+  }
+  return list;
+}
+
+function renderProfileStats(player) {
+  const root = document.getElementById('profile-stats');
+  clear(root);
+  const stats = player.stats;
+  if (!stats || (!stats.quests?.length && !stats.weapons?.length && !stats.recent_quests?.length &&
+      !stats.fs_level && !stats.awards)) {
+    root.append(make('p', 'muted', 'No guild card summary reported yet.'));
+    return;
+  }
+  const columns = make('div', 'stat-columns');
+  if (stats.quests?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Quests completed'));
+    const total = stats.quests.reduce((sum, quest) => sum + (quest.count || 0), 0);
+    box.append(make('p', 'stat-total', total + ' completed'));
+    box.append(statList(stats.quests));
+    columns.append(box);
+  }
+  if (stats.weapons?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Weapon usage'));
+    box.append(statList(stats.weapons.slice(0, 6)));
+    columns.append(box);
+  }
+  if (columns.childNodes.length) root.append(columns);
+  if (stats.recent_quests?.length) {
+    const box = make('section', 'stat-box');
+    box.append(make('h4', '', 'Recent quests'));
+    const list = make('ul', 'recent-quests');
+    for (const quest of stats.recent_quests) list.append(make('li', '', quest));
+    box.append(list);
+    root.append(box);
+  }
+}
+
+function openProfile(id) {
+  const player = state.byId.get(id);
+  if (!player) return;
+  document.getElementById('profile-name').textContent = playerName(player);
+  const subtitle = [];
+  if (player.nickname && player.nickname !== player.name) subtitle.push('Nickname: ' + player.nickname);
+  if (player.title) subtitle.push('Title: ' + player.title);
+  document.getElementById('profile-sub').textContent = subtitle.join(' · ');
+  const body = document.getElementById('profile-body');
+  clear(body);
+  const stats = player.stats || {};
+  body.append(row('HR', player.hr ? 'HR ' + player.hr : ''));
+  body.append(row('Hall', player.hall ? hallLabel(player.hall) : ''));
+  body.append(row('Play time', stats.play_seconds ? playTime(stats.play_seconds) : ''));
+  body.append(row('FS level', stats.fs_level));
+  if (stats.awards) body.append(row('Awards', stats.awards));
+  body.append(row('First seen', player.first_seen ? new Date(player.first_seen).toLocaleString() : ''));
+  body.append(row('Last seen', player.online ? 'now' : ago(player.last_seen)));
+  body.append(row('Reports', player.reports));
+  const equipment = document.getElementById('profile-equipment');
+  clear(equipment);
+  for (const piece of player.equipment || []) {
+    equipment.append(make('li', '', (piece.name || (piece.slot + ' #' + piece.id)) + ' — ' + piece.slot));
+  }
+  if (player.weapon) {
+    const weapon = player.weapon.name || ('Weapon #' + player.weapon.id);
+    equipment.append(make('li', '', weapon + ' — ' + (player.weapon.type || 'weapon')));
+  }
+  if (!equipment.childNodes.length) equipment.append(make('li', 'muted', 'No equipment reported.'));
+  renderProfileStats(player);
+  document.getElementById('profile').hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeProfile() {
+  document.getElementById('profile').hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+async function refresh() {
+  try {
+    const response = await fetch('/api/players', { cache: 'no-store' });
+    const data = await response.json();
+    state.players = data.players || [];
+    state.halls = data.halls || [];
+    state.byId = new Map(state.players.map(player => [player.id, player]));
+    state.hallLabels = new Map(state.halls.map(hall => [hall.name, hall.label || hall.name]));
+    document.getElementById('online').textContent = data.online;
+    document.getElementById('hall-count').textContent = state.halls.length + ' hall' + (state.halls.length === 1 ? '' : 's');
+    document.getElementById('status').textContent = '';
+    renderHalls();
+    renderHunters();
+  } catch (error) {
+    document.getElementById('status').textContent = 'Cannot reach the dashboard: ' + error;
+  }
+}
+
+document.getElementById('profile-close').addEventListener('click', closeProfile);
+document.getElementById('profile-backdrop').addEventListener('click', closeProfile);
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeProfile(); });
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
