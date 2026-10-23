@@ -308,6 +308,8 @@ function questCard(quest) {
   const poster = quest.poster || quest.client;
   if (poster) meta.push('Posted by: ' + poster);
   if (quest.accepted) meta.push('Accepted: ' + quest.accepted);
+  if (quest.zone) meta.push('Zone: ' + quest.zone);
+  if (quest.min_hr) meta.push('Min. HR: ' + quest.min_hr);
   if (quest.monsters) meta.push('Target: ' + quest.monsters);
   if (quest.objective) meta.push(quest.objective);
   if (quest.started_at) meta.push('Running: ' + ago(quest.started_at));

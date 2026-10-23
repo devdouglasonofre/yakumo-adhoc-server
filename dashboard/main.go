@@ -80,9 +80,11 @@ type Quest struct {
 	Slot      int    `json:"slot"`
 	ID        uint16 `json:"id"`
 	Stars     int    `json:"stars"`
+	MinHR     int    `json:"min_hr,omitempty"`
 	Fee       uint32 `json:"fee"`
 	Reward    uint32 `json:"reward"`
 	TimeLimit uint32 `json:"time_limit"` // frames at 30 a second
+	Zone      string `json:"zone,omitempty"`
 	Name      string `json:"name"`
 	Objective string `json:"objective,omitempty"`
 	Monsters  string `json:"monsters,omitempty"`
