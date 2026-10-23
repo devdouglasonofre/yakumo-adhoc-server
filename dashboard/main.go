@@ -87,6 +87,7 @@ type Quest struct {
 	Objective string `json:"objective,omitempty"`
 	Monsters  string `json:"monsters,omitempty"`
 	Client    string `json:"client,omitempty"`
+	Poster    string `json:"poster,omitempty"`
 	Accepted  string `json:"accepted,omitempty"`
 	Password  string `json:"password,omitempty"`
 	StartedAt string `json:"started_at,omitempty"`

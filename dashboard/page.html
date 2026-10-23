@@ -305,7 +305,8 @@ function questCard(quest) {
   card.append(top);
   card.append(make('h3', '', quest.name || ('Quest #' + quest.id)));
   const meta = [];
-  if (quest.client) meta.push('Posted by: ' + quest.client);
+  const poster = quest.poster || quest.client;
+  if (poster) meta.push('Posted by: ' + poster);
   if (quest.accepted) meta.push('Accepted: ' + quest.accepted);
   if (quest.monsters) meta.push('Target: ' + quest.monsters);
   if (quest.objective) meta.push(quest.objective);
