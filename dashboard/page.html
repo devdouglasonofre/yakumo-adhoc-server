@@ -310,7 +310,7 @@ function questCard(quest) {
   if (quest.accepted) meta.push('Accepted: ' + quest.accepted);
   if (quest.zone) meta.push('Zone: ' + quest.zone);
   if (quest.min_hr) meta.push('Min. HR: ' + quest.min_hr);
-  if (quest.monsters) meta.push('Target: ' + quest.monsters);
+  if (quest.monsters) meta.push('Also present: ' + quest.monsters);
   if (quest.objective) meta.push(quest.objective);
   if (quest.started_at) meta.push('Running: ' + ago(quest.started_at));
   if (quest.password) meta.push('Password: ' + quest.password);
