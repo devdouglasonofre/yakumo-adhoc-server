@@ -312,6 +312,7 @@ function questCard(quest) {
   if (quest.objective) meta.push(quest.objective);
   if (quest.started_at) meta.push('Running: ' + ago(quest.started_at));
   if (quest.password) meta.push('Password: ' + quest.password);
+  if (quest.note) meta.push('Note: ' + quest.note);
   if (meta.length) card.append(make('p', 'meta', meta.join(' · ')));
   const foot = [];
   if (quest.fee) foot.push('Fee ' + quest.fee + 'z');

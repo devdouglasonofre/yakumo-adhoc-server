@@ -90,6 +90,7 @@ type Quest struct {
 	Poster    string `json:"poster,omitempty"`
 	Accepted  string `json:"accepted,omitempty"`
 	Password  string `json:"password,omitempty"`
+	Note      string `json:"note,omitempty"`
 	StartedAt string `json:"started_at,omitempty"`
 }
 
