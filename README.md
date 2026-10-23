@@ -104,8 +104,8 @@ The page groups the posted quests by gathering hall and shows each hunter's
 HR, guild card title and equipment, including the weapon's class. Halls are
 labelled by their order ("Hall 1", "Hall 2") instead of the game's own group
 id. Clicking a hunter opens a Guild Card profile with the data that client
-reported: play time, FS level, quest counts, weapon usage, recent quests and
-the award count. The public API does not expose the virtual MAC or the game's
+reported: play time, FS level, quest counts, weapon usage and recent quests.
+The public API does not expose the virtual MAC or the game's
 product code; the profile is keyed by an opaque per-run ID. The dashboard
 keeps everything in memory, so a restart clears the board. The data is
 self-reported by each client; treat it as informational, not authoritative.

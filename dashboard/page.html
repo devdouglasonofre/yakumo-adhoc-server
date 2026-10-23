@@ -447,7 +447,7 @@ function openProfile(id) {
   body.append(row('Hall', player.hall ? hallLabel(player.hall) : ''));
   body.append(row('Play time', stats.play_seconds ? playTime(stats.play_seconds) : ''));
   body.append(row('FS level', stats.fs_level));
-  body.append(row('Awards', stats.awards));
+  if (stats.awards) body.append(row('Awards', stats.awards));
   body.append(row('First seen', player.first_seen ? new Date(player.first_seen).toLocaleString() : ''));
   body.append(row('Last seen', player.online ? 'now' : ago(player.last_seen)));
   body.append(row('Reports', player.reports));
